@@ -6,7 +6,10 @@
     "https://medium.com/@singh.tarus/tracking-llm-hallucinations-using-react-style-reasoning-without-telling-the-model-the-rules-855ca6147c29",
     "https://medium.com/@akankshasinha247/prompt-engineering-part-3-unlocking-llm-superpowers-with-reasoning-techniques-9848cabc21f0",
     "https://medium.com/@tahirbalarabe2/what-is-prompt-engineering-rag-cot-react-dsp-explained-0aa0a9bd0a90",
-    "https://medium.com/papers-i-found/e26-react-synergizing-reasoning-and-acting-in-language-models-14a08f46c33d"
+    "https://medium.com/papers-i-found/e26-react-synergizing-reasoning-and-acting-in-language-models-14a08f46c33d",
+    "https://medium.com/@yulia.savliuk/best-ai-workflow-automation-tools-for-mac-d58984d5893d",
+    "https://medium.com/@ashlyvincent123/i-used-chatgpt-for-30-days-as-a-ux-writer-heres-what-actually-changed-458ee4d92927",
+    "https://medium.com/@ipfahad46/super-agent-in-byteflow-the-most-powerful-agentic-ai-for-autonomous-business-automation-2026-83fa2d969555"
   ],
   "articles": [
     {
@@ -57,6 +60,42 @@
       "file": "2026-02-20_E26--ReAct--Synergizing-Reasoning-and-Acting-in-Language-Mod",
       "scraped": "2026-02-20",
       "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@yulia.savliuk/best-ai-workflow-automation-tools-for-mac-d58984d5893d",
+      "title": "AI workflow automation tools that actually work on Mac in 2026.",
+      "file": "2026-02-20_AI-workflow-automation-tools-that-actually-work-on-Mac-in-20",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@ashlyvincent123/i-used-chatgpt-for-30-days-as-a-ux-writer-heres-what-actually-changed-458ee4d92927",
+      "title": "I Used ChatGPT for 30 Days as a UX Writer. Here’s What Actually Changed",
+      "file": "2026-02-20_I-Used-ChatGPT-for-30-Days-as-a-UX-Writer-Heres-What-Actuall",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@ipfahad46/super-agent-in-byteflow-the-most-powerful-agentic-ai-for-autonomous-business-automation-2026-83fa2d969555",
+      "title": "Super Agent in Byteflow: The Most Powerful Agentic AI for Autonomous Business Automation (2026)",
+      "file": "2026-02-20_Super-Agent-in-Byteflow-The-Most-Powerful-Agentic-AI-for-Aut",
+      "scraped": "2026-02-20",
+      "status": "raw"
     }
-  ]
+  ],
+  "article_ids": [
+    "fbff39dd9a4fe7dd",
+    "69b4a3f240973909",
+    "6580e1cca64c9278",
+    "217c0c24eef85176",
+    "652980fc985d0127",
+    "39283a6ca4f3b1ee",
+    "6c6cc924c6fd522d",
+    "b4d9754fcb5bc589",
+    "e887232d75797408",
+    "91e1475718cbd3d6"
+  ],
+  "total_articles": 10,
+  "total_chunks": 29,
+  "last_updated": "2026-02-20"
 }

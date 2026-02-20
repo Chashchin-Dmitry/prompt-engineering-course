@@ -18,11 +18,12 @@ from dotenv import load_dotenv
 load_dotenv(Path(__file__).parent / ".env")
 
 # ── Пути ──────────────────────────────────────────────────────────────────────
-REPO_PATH    = Path(os.getenv("REPO_PATH", Path(__file__).parent.parent))
-CONTENT_RAW  = REPO_PATH / "content" / "raw"
-LOGS_DIR     = REPO_PATH / "logs"
-KEYWORDS_FILE = Path(__file__).parent / "keywords.json"
-INDEX_FILE   = REPO_PATH / "content" / "index.json"
+REPO_PATH       = Path(os.getenv("REPO_PATH", Path(__file__).parent.parent))
+CONTENT_RAW     = REPO_PATH / "content" / "raw"
+SCREENSHOTS_DIR = REPO_PATH / "content" / "screenshots"
+LOGS_DIR        = REPO_PATH / "logs"
+KEYWORDS_FILE   = Path(__file__).parent / "keywords.json"
+INDEX_FILE      = REPO_PATH / "content" / "index.json"
 
 # ── Настройки ─────────────────────────────────────────────────────────────────
 MAX_ARTICLES    = int(os.getenv("MAX_ARTICLES_PER_RUN", 15))
@@ -255,6 +256,43 @@ def save_article(article):
     return fname
 
 
+# ── Screenshot ───────────────────────────────────────────────────────────────
+
+def take_screenshot(url: str, fname: str, cookies: dict):
+    """Делаем скриншот статьи через headless Playwright."""
+    try:
+        from playwright.sync_api import sync_playwright
+
+        SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        out_path = SCREENSHOTS_DIR / f"{fname}.png"
+
+        if out_path.exists():
+            return str(out_path)
+
+        with sync_playwright() as p:
+            browser = p.chromium.launch(headless=True)
+            ctx = browser.new_context(
+                viewport={"width": 1280, "height": 900},
+                user_agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36"
+            )
+            # Инжектируем куки
+            ctx.add_cookies([
+                {"name": k, "value": v, "domain": ".medium.com", "path": "/"}
+                for k, v in cookies.items()
+            ])
+            page = ctx.new_page()
+            page.goto(url, wait_until="domcontentloaded", timeout=20000)
+            page.wait_for_timeout(2000)  # Ждём рендер
+            page.screenshot(path=str(out_path), full_page=False)
+            browser.close()
+
+        log(f"📸 Скриншот: {fname}.png")
+        return str(out_path)
+    except Exception as e:
+        log(f"⚠️ Скриншот не удался: {e}")
+        return None
+
+
 # ── Git Push ──────────────────────────────────────────────────────────────────
 
 def git_push(count, new_kw):
@@ -284,6 +322,9 @@ def scrape():
     queries = pick_queries(db, QUERIES_PER_RUN)
     log(f"📋 Запросы: {', '.join(queries)}")
     log(f"📦 Лимит: {MAX_ARTICLES} статей | Ключей в базе: {len(db['queue'])}")
+
+    from pycookiecheat import chrome_cookies as _chrome_cookies
+    raw_cookies = _chrome_cookies('https://medium.com')
 
     session = make_session()
     idx = load_index()
@@ -316,6 +357,7 @@ def scrape():
 
             if article:
                 fname = save_article(article)
+                take_screenshot(url, fname, raw_cookies)
                 add_to_index(idx, url, article["title"], fname)
                 nk = add_discovered_keywords(db, article["content"])
                 new_keywords_total += nk

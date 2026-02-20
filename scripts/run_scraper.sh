@@ -44,9 +44,9 @@ EOF
 )
 
 if [ "$CHECK" = "OK" ]; then
-    log "✅ Авторизация OK — запускаем скрапер"
+    log "✅ Авторизация OK — запускаем полный конвейер"
     cd "$REPO_DIR"
-    $PYTHON "$SCRIPT_DIR/scraper.py"
+    $PYTHON "$SCRIPT_DIR/pipeline.py"
 elif [ "$CHECK" = "NO_AUTH" ]; then
     log "⛔ Chrome не залогинен в Google/Medium — пропускаем запуск"
     exit 1
