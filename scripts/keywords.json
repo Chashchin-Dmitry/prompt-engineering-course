@@ -29,9 +29,26 @@
     "context window optimization",
     "AI coding assistant",
     "prompt injection security",
-    "self-consistency prompting"
+    "self-consistency prompting",
+    "agent engineering",
+    "agent a",
+    "prompt tweaks",
+    "prompt guides",
+    "prompt behaved"
   ],
-  "done": [],
-  "discovered": [],
+  "done": [
+    "prompt engineering",
+    "chain of thought prompting",
+    "few-shot learning",
+    "zero-shot prompting",
+    "RAG retrieval augmented generation"
+  ],
+  "discovered": [
+    "agent engineering",
+    "agent a",
+    "prompt tweaks",
+    "prompt guides",
+    "prompt behaved"
+  ],
   "last_updated": "2026-02-20"
 }
