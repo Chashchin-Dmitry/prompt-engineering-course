@@ -281,7 +281,17 @@ def scrape():
 
                     try:
                         log(f"\n📖 {url[:80]}")
-                        page.goto(url, timeout=20000)
+
+                        # Если страница упала — открываем новую
+                        try:
+                            page.title()
+                        except Exception:
+                            log("🔄 Переоткрываю страницу...")
+                            page = ctx.new_page()
+                            stealth_sync(page)
+                            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+
+                        page.goto(url, timeout=25000)
                         human_delay(4, 7)
 
                         screenshot = page.screenshot(full_page=True)
@@ -289,7 +299,6 @@ def scrape():
 
                         if article and len(article.get("content", "")) > 500:
                             save_article(article, screenshot)
-                            # Рекурсивное расширение базы
                             nk = add_discovered_keywords(db, article["content"])
                             new_keywords_total += nk
                             scraped_count += 1
@@ -301,6 +310,13 @@ def scrape():
 
                     except Exception as e:
                         log(f"❌ {url}: {e}")
+                        # Пробуем пересоздать страницу и продолжаем
+                        try:
+                            page = ctx.new_page()
+                            stealth_sync(page)
+                            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
+                        except Exception:
+                            pass
                         continue
 
             ctx.close()
