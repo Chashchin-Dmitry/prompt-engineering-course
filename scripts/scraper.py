@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Medium Scraper for Prompt Engineering Course
-Имитирует поведение реального пользователя через копию Chrome профиля.
+Medium Scraper — Prompt Engineering Course
+Рекурсивный снежный ком: парсим статьи → извлекаем новые термины → расширяем базу.
 """
 
 import os
@@ -11,264 +11,323 @@ import random
 import shutil
 import subprocess
 import json
+import re
 from datetime import datetime
 from pathlib import Path
 from dotenv import load_dotenv
 
 load_dotenv(Path(__file__).parent / ".env")
 
-# Config
-REPO_PATH = Path(os.getenv("REPO_PATH", Path(__file__).parent.parent))
-CONTENT_RAW = REPO_PATH / "content" / "raw"
+# ── Пути ──────────────────────────────────────────────────────────────────────
+REPO_PATH       = Path(os.getenv("REPO_PATH", Path(__file__).parent.parent))
+CONTENT_RAW     = REPO_PATH / "content" / "raw"
 SCREENSHOTS_DIR = REPO_PATH / "content" / "screenshots"
+KEYWORDS_FILE   = Path(__file__).parent / "keywords.json"
+LOGS_DIR        = REPO_PATH / "logs"
+
 CHROME_PROFILE_SRC = Path(os.getenv(
     "CHROME_PROFILE_PATH",
     os.path.expanduser("~/Library/Application Support/Google/Chrome/Default")
 ))
 CHROME_PROFILE_TMP = REPO_PATH / "chrome-profile-copy"
-MAX_ARTICLES = int(os.getenv("MAX_ARTICLES_PER_RUN", 15))
-MIN_DELAY = float(os.getenv("MIN_DELAY", 2))
-MAX_DELAY = float(os.getenv("MAX_DELAY", 5))
-AUTO_GIT_PUSH = os.getenv("AUTO_GIT_PUSH", "true").lower() == "true"
 
-QUERIES = [q.strip() for q in os.getenv(
-    "MEDIUM_QUERIES",
-    "prompt engineering,AI tools,LLM prompting,ChatGPT tips,Claude AI"
-).split(",")]
+# ── Настройки ─────────────────────────────────────────────────────────────────
+MAX_ARTICLES    = int(os.getenv("MAX_ARTICLES_PER_RUN", 15))
+QUERIES_PER_RUN = int(os.getenv("QUERIES_PER_RUN", 5))
+MIN_DELAY       = float(os.getenv("MIN_DELAY", 2))
+MAX_DELAY       = float(os.getenv("MAX_DELAY", 5))
+AUTO_GIT_PUSH   = os.getenv("AUTO_GIT_PUSH", "true").lower() == "true"
 
-MEDIUM_SEARCH_URL = "https://medium.com/search?q={query}&source=search_post---------0"
+# AI-термины для извлечения новых ключевых слов из статей
+AI_TERMS_PATTERN = re.compile(
+    r'\b(prompt\s+\w+|RAG|LLM|GPT-?\d*|Claude\s*\w*|Gemini\s*\w*|Llama\s*\d*|'
+    r'chain.of.thought|few.shot|zero.shot|fine.tun\w+|embedding\w*|vector\s+\w+|'
+    r'LangChain|LlamaIndex|CrewAI|AutoGPT|Cursor\s*AI|Copilot|Perplexity|'
+    r'ReAct|tree.of.thoughts|self.consistency|function.calling|'
+    r'Mistral|Codex|Grok|Qwen|GLM|Falcon|Mixtral|Gemma|'
+    r'agent\s+\w+|agentic\s+\w+|multi.agent|autonomous\s+AI|'
+    r'context.window|temperature\s+\w+|system.prompt|prompt.injection|'
+    r'hallucination\s+\w+|grounding|guardrail\w*)\b',
+    re.IGNORECASE
+)
 
 
-def human_delay(min_s=None, max_s=None):
-    """Случайная пауза как у человека."""
-    time.sleep(random.uniform(min_s or MIN_DELAY, max_s or MAX_DELAY))
+def log(msg):
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    line = f"[{ts}] {msg}"
+    print(line)
+    LOGS_DIR.mkdir(exist_ok=True)
+    with open(LOGS_DIR / "scraper.log", "a") as f:
+        f.write(line + "\n")
+
+
+def human_delay(mn=None, mx=None):
+    time.sleep(random.uniform(mn or MIN_DELAY, mx or MAX_DELAY))
 
 
 def human_scroll(page, steps=5):
-    """Плавный скролл вниз."""
     for _ in range(steps):
         page.mouse.wheel(0, random.randint(200, 500))
         time.sleep(random.uniform(0.3, 0.8))
 
 
+# ── Keywords DB ───────────────────────────────────────────────────────────────
+
+def load_keywords():
+    if KEYWORDS_FILE.exists():
+        return json.loads(KEYWORDS_FILE.read_text())
+    return {"queue": [], "done": [], "discovered": [], "last_updated": ""}
+
+
+def save_keywords(db):
+    db["last_updated"] = datetime.now().strftime("%Y-%m-%d")
+    KEYWORDS_FILE.write_text(json.dumps(db, ensure_ascii=False, indent=2))
+
+
+def pick_queries(db, n=QUERIES_PER_RUN):
+    """Берём n запросов из очереди, не повторяем уже использованные."""
+    available = [q for q in db["queue"] if q not in db["done"]]
+    picks = available[:n]
+    # Если очередь кончается — берём снова с начала (актуальность важна)
+    if len(picks) < n:
+        db["done"] = []
+        picks = db["queue"][:n]
+    return picks
+
+
+def add_discovered_keywords(db, text):
+    """Извлекаем новые AI-термины из текста статьи и добавляем в очередь."""
+    found = set(AI_TERMS_PATTERN.findall(text))
+    new_terms = []
+    for term in found:
+        term = term.strip().lower()
+        if (term not in [q.lower() for q in db["queue"]] and
+                term not in [d.lower() for d in db["discovered"]] and
+                len(term) > 4):
+            db["discovered"].append(term)
+            db["queue"].append(term)
+            new_terms.append(term)
+    if new_terms:
+        log(f"  🔍 Новые термины: {', '.join(new_terms[:5])}{'...' if len(new_terms) > 5 else ''}")
+    return len(new_terms)
+
+
+# ── Chrome ────────────────────────────────────────────────────────────────────
+
 def copy_chrome_profile():
-    """Копируем профиль Chrome во временную папку."""
     if CHROME_PROFILE_TMP.exists():
         shutil.rmtree(CHROME_PROFILE_TMP)
-    print(f"📋 Копирую Chrome профиль...")
-    shutil.copytree(CHROME_PROFILE_SRC, CHROME_PROFILE_TMP, ignore_errors=True)
-    print("✅ Профиль скопирован")
+    log("📋 Копирую Chrome профиль...")
+    shutil.copytree(CHROME_PROFILE_SRC, CHROME_PROFILE_TMP,
+                    ignore=shutil.ignore_patterns("SingletonLock", "SingletonCookie"),
+                    ignore_errors=True)
+    log("✅ Профиль скопирован")
 
 
 def cleanup_chrome_profile():
-    """Удаляем временную копию после работы."""
     if CHROME_PROFILE_TMP.exists():
         shutil.rmtree(CHROME_PROFILE_TMP)
-    print("🧹 Временный профиль удалён")
+    log("🧹 Временный профиль удалён")
 
 
-def extract_article_content(page):
-    """Извлекаем текст и метаданные статьи."""
+# ── Scraping ──────────────────────────────────────────────────────────────────
+
+def get_article_links(page, query, max_links=5):
+    url = f"https://medium.com/search?q={query.replace(' ', '%20')}&source=search_post---------0"
+    log(f"🔍 Ищу: '{query}'")
     try:
-        # Ждём загрузки контента
-        page.wait_for_selector("article", timeout=10000)
-        human_scroll(page, steps=8)
+        page.goto(url, timeout=20000)
+        human_delay(3, 6)
+        human_scroll(page, steps=4)
 
-        title = page.title().replace(" | Medium", "").replace(" | by", "").strip()
-
-        # Извлекаем текст статьи
-        content = page.evaluate("""() => {
-            const article = document.querySelector('article');
-            if (!article) return '';
-            // Убираем кнопки и навигацию
-            const unwanted = article.querySelectorAll('button, nav, [role="navigation"]');
-            unwanted.forEach(el => el.remove());
-            return article.innerText;
+        links = page.evaluate("""() => {
+            const links = new Set();
+            document.querySelectorAll('a[href]').forEach(a => {
+                const h = a.href;
+                if (h && h.includes('medium.com') &&
+                    (h.includes('/p/') || (h.match(/medium\\.com\\/@[^/]+\\/[^/?]+/))) &&
+                    !h.includes('/search') && !h.includes('/tag/') &&
+                    !h.includes('/m/signin') && !h.includes('?source=follow')) {
+                    links.add(h.split('?')[0]);
+                }
+            });
+            return Array.from(links).slice(0, 10);
         }""")
-
-        # Автор
-        author = page.evaluate("""() => {
-            const authorEl = document.querySelector('a[data-testid="authorName"]') ||
-                           document.querySelector('[rel="author"]');
-            return authorEl ? authorEl.innerText : 'Unknown';
-        }""")
-
-        return {
-            "title": title,
-            "content": content,
-            "author": author,
-            "url": page.url,
-            "scraped_at": datetime.now().isoformat()
-        }
+        return links[:max_links]
     except Exception as e:
-        print(f"⚠️ Ошибка извлечения контента: {e}")
+        log(f"⚠️ Ошибка поиска '{query}': {e}")
+        return []
+
+
+def extract_article(page):
+    try:
+        page.wait_for_selector("article", timeout=12000)
+        human_scroll(page, steps=8)
+        human_delay(2, 4)
+
+        data = page.evaluate("""() => {
+            const article = document.querySelector('article');
+            if (!article) return null;
+            const unwanted = article.querySelectorAll('button, nav, [role="navigation"], script, style');
+            unwanted.forEach(el => el.remove());
+            const title = document.title.replace(/ \\| Medium$/, '').replace(/ \\| by .+$/, '').trim();
+            const authorEl = document.querySelector('a[data-testid="authorName"], [rel="author"]');
+            const dateEl = document.querySelector('time');
+            return {
+                title: title,
+                content: article.innerText.trim(),
+                author: authorEl ? authorEl.innerText.trim() : 'Unknown',
+                published: dateEl ? dateEl.getAttribute('datetime') : null
+            };
+        }""")
+        if data:
+            data["url"] = page.url
+        return data
+    except Exception as e:
+        log(f"⚠️ Ошибка извлечения: {e}")
         return None
 
 
-def save_article(article_data, screenshot_bytes=None):
-    """Сохраняем статью в markdown и скриншот."""
-    if not article_data:
-        return
-
+def save_article(article, screenshot=None):
     date_str = datetime.now().strftime("%Y-%m-%d")
-    safe_title = "".join(c for c in article_data["title"] if c.isalnum() or c in " -_")[:60]
-    safe_title = safe_title.strip().replace(" ", "-")
-    filename = f"{date_str}_{safe_title}"
+    safe = re.sub(r'[^\w\s-]', '', article["title"])[:60].strip().replace(' ', '-')
+    fname = f"{date_str}_{safe}"
 
-    # Markdown
-    md_content = f"""# {article_data['title']}
+    md = f"""# {article['title']}
 
-**Source:** [{article_data['url']}]({article_data['url']})
-**Author:** {article_data['author']}
-**Date scraped:** {date_str}
-**Tags:** prompt-engineering, AI, medium
+**Source:** {article['url']}
+**Author:** {article['author']}
+**Published:** {article.get('published', 'unknown')}
+**Scraped:** {date_str}
 
 ---
 
-{article_data['content']}
+{article['content']}
 
 ---
-
-*Scraped automatically for Prompt Engineering Course*
+*Auto-collected for Prompt Engineering Course*
 """
-    md_path = CONTENT_RAW / f"{filename}.md"
-    md_path.parent.mkdir(parents=True, exist_ok=True)
-    md_path.write_text(md_content, encoding="utf-8")
-    print(f"💾 Сохранено: {md_path.name}")
+    CONTENT_RAW.mkdir(parents=True, exist_ok=True)
+    (CONTENT_RAW / f"{fname}.md").write_text(md, encoding="utf-8")
 
-    # Скриншот
-    if screenshot_bytes:
-        ss_path = SCREENSHOTS_DIR / f"{filename}.png"
-        ss_path.parent.mkdir(parents=True, exist_ok=True)
-        ss_path.write_bytes(screenshot_bytes)
-        print(f"📸 Скриншот: {ss_path.name}")
+    if screenshot:
+        SCREENSHOTS_DIR.mkdir(parents=True, exist_ok=True)
+        (SCREENSHOTS_DIR / f"{fname}.png").write_bytes(screenshot)
 
-    return filename
+    log(f"💾 Сохранено: {fname[:50]}")
+    return fname
 
 
-def get_article_links(page, query, max_links=5):
-    """Получаем ссылки на статьи по запросу."""
-    url = MEDIUM_SEARCH_URL.format(query=query.replace(" ", "%20"))
-    print(f"🔍 Ищу: '{query}'")
-    page.goto(url)
-    human_delay(3, 6)
-    human_scroll(page, steps=4)
-
-    links = page.evaluate("""() => {
-        const links = [];
-        document.querySelectorAll('a[href*="/p/"], a[href*="medium.com/@"]').forEach(a => {
-            const href = a.href;
-            if (href && href.includes('medium.com') && !href.includes('/search') && 
-                !href.includes('/tag/') && !links.includes(href)) {
-                links.push(href);
-            }
-        });
-        return links.slice(0, 10);
-    }""")
-
-    return links[:max_links]
-
+# ── Main ──────────────────────────────────────────────────────────────────────
 
 def scrape():
-    """Главная функция скрапинга."""
     from playwright.sync_api import sync_playwright
     from playwright_stealth import stealth_sync
 
-    print(f"\n🚀 Запуск скрапера | {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
-    print(f"📋 Запросы: {', '.join(QUERIES)}")
-    print(f"📦 Лимит: {MAX_ARTICLES} статей")
+    log("=" * 60)
+    log(f"🚀 Запуск скрапера")
+
+    db = load_keywords()
+    queries = pick_queries(db, QUERIES_PER_RUN)
+    log(f"📋 Запросы: {', '.join(queries)}")
+    log(f"📦 Лимит: {MAX_ARTICLES} статей | Ключей в базе: {len(db['queue'])}")
 
     copy_chrome_profile()
 
     scraped_count = 0
     scraped_urls = set()
+    new_keywords_total = 0
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch_persistent_context(
+            ctx = p.chromium.launch_persistent_context(
                 user_data_dir=str(CHROME_PROFILE_TMP),
                 channel="chrome",
-                headless=False,  # Видимый браузер — меньше риск бана
+                headless=False,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--no-first-run",
                     "--no-default-browser-check",
+                    "--disable-extensions",
                 ],
-                slow_mo=random.randint(50, 150),
+                slow_mo=random.randint(60, 140),
             )
 
-            page = browser.new_page()
+            page = ctx.new_page()
             stealth_sync(page)
+            page.set_extra_http_headers({"Accept-Language": "en-US,en;q=0.9"})
 
-            # Устанавливаем реалистичный user agent
-            page.set_extra_http_headers({
-                "Accept-Language": "en-US,en;q=0.9,ru;q=0.8",
-            })
-
-            for query in QUERIES:
+            for query in queries:
                 if scraped_count >= MAX_ARTICLES:
                     break
 
-                links = get_article_links(page, query, max_links=5)
-                print(f"  → Найдено {len(links)} статей")
+                db["done"].append(query)
+                links = get_article_links(page, query, max_links=4)
+                log(f"  → {len(links)} статей найдено")
 
                 for url in links:
                     if scraped_count >= MAX_ARTICLES:
                         break
                     if url in scraped_urls:
                         continue
-
                     scraped_urls.add(url)
 
                     try:
-                        print(f"\n📖 Читаю: {url[:80]}...")
-                        page.goto(url)
+                        log(f"\n📖 {url[:80]}")
+                        page.goto(url, timeout=20000)
                         human_delay(4, 7)
 
-                        # Скриншот всей страницы
                         screenshot = page.screenshot(full_page=True)
+                        article = extract_article(page)
 
-                        # Текст
-                        article = extract_article_content(page)
-
-                        if article:
+                        if article and len(article.get("content", "")) > 500:
                             save_article(article, screenshot)
+                            # Рекурсивное расширение базы
+                            nk = add_discovered_keywords(db, article["content"])
+                            new_keywords_total += nk
                             scraped_count += 1
-                            print(f"✅ Статья {scraped_count}/{MAX_ARTICLES}")
+                            log(f"✅ [{scraped_count}/{MAX_ARTICLES}] '{article['title'][:50]}'")
+                        else:
+                            log("⏭️ Пропущено (мало контента или пейволл)")
 
                         human_delay(3, 6)
 
                     except Exception as e:
-                        print(f"❌ Ошибка на {url}: {e}")
+                        log(f"❌ {url}: {e}")
                         continue
 
-            browser.close()
+            ctx.close()
 
     except Exception as e:
-        print(f"❌ Критическая ошибка: {e}")
-        sys.exit(1)
+        log(f"❌ Критическая ошибка: {e}")
     finally:
         cleanup_chrome_profile()
 
-    print(f"\n✅ Готово! Собрано {scraped_count} статей")
+    save_keywords(db)
 
-    # Git push
+    log(f"\n{'='*60}")
+    log(f"✅ Готово: {scraped_count} статей | +{new_keywords_total} новых терминов")
+    log(f"📚 База ключевых слов: {len(db['queue'])} запросов")
+
     if AUTO_GIT_PUSH and scraped_count > 0:
-        git_push(scraped_count)
+        git_push(scraped_count, new_keywords_total)
 
 
-def git_push(count):
-    """Коммитим и пушим новый контент."""
-    print("\n📤 Пушу в GitHub...")
+def git_push(count, new_kw):
+    log("\n📤 Пушу в GitHub...")
     try:
         os.chdir(REPO_PATH)
-        subprocess.run(["git", "add", "content/"], check=True)
-        msg = f"feat: scrape {count} new Medium articles [{datetime.now().strftime('%Y-%m-%d')}]"
-        subprocess.run(["git", "commit", "-m", msg], check=True)
-        subprocess.run(["git", "push"], check=True)
-        print("✅ Запушено в GitHub!")
-    except subprocess.CalledProcessError as e:
-        print(f"⚠️ Git push не удался: {e}")
+        subprocess.run(["git", "add", "content/", "scripts/keywords.json"], check=True)
+        msg = (f"feat: scrape {count} articles, +{new_kw} new keywords "
+               f"[{datetime.now().strftime('%Y-%m-%d')}]")
+        result = subprocess.run(["git", "commit", "-m", msg], capture_output=True, text=True)
+        if result.returncode == 0:
+            subprocess.run(["git", "push"], check=True)
+            log("✅ Запушено!")
+        else:
+            log("ℹ️ Нечего коммитить")
+    except Exception as e:
+        log(f"⚠️ Git push: {e}")
 
 
 if __name__ == "__main__":
