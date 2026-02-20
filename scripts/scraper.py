@@ -8,7 +8,6 @@ import os
 import sys
 import time
 import random
-import shutil
 import subprocess
 import json
 import re
@@ -25,11 +24,7 @@ SCREENSHOTS_DIR = REPO_PATH / "content" / "screenshots"
 KEYWORDS_FILE   = Path(__file__).parent / "keywords.json"
 LOGS_DIR        = REPO_PATH / "logs"
 
-CHROME_PROFILE_SRC = Path(os.getenv(
-    "CHROME_PROFILE_PATH",
-    os.path.expanduser("~/Library/Application Support/Google/Chrome/Default")
-))
-CHROME_PROFILE_TMP = REPO_PATH / "chrome-profile-copy"
+STORAGE_STATE = Path(__file__).parent / "storage_state.json"
 
 # ── Настройки ─────────────────────────────────────────────────────────────────
 MAX_ARTICLES    = int(os.getenv("MAX_ARTICLES_PER_RUN", 15))
@@ -113,29 +108,6 @@ def add_discovered_keywords(db, text):
 
 
 # ── Chrome ────────────────────────────────────────────────────────────────────
-
-def copy_chrome_profile():
-    if CHROME_PROFILE_TMP.exists():
-        shutil.rmtree(CHROME_PROFILE_TMP)
-    CHROME_PROFILE_TMP.mkdir(parents=True, exist_ok=True)
-    log("📋 Копирую Chrome профиль...")
-    subprocess.run([
-        "rsync", "-a", "--quiet",
-        "--exclude=SingletonLock",
-        "--exclude=SingletonCookie",
-        "--exclude=GPUCache",
-        "--exclude=*.log",
-        f"{CHROME_PROFILE_SRC}/",
-        f"{CHROME_PROFILE_TMP}/"
-    ], capture_output=True)
-    log("✅ Профиль скопирован")
-
-
-def cleanup_chrome_profile():
-    if CHROME_PROFILE_TMP.exists():
-        shutil.rmtree(CHROME_PROFILE_TMP)
-    log("🧹 Временный профиль удалён")
-
 
 # ── Scraping ──────────────────────────────────────────────────────────────────
 
@@ -239,7 +211,9 @@ def scrape():
     log(f"📋 Запросы: {', '.join(queries)}")
     log(f"📦 Лимит: {MAX_ARTICLES} статей | Ключей в базе: {len(db['queue'])}")
 
-    copy_chrome_profile()
+    if not STORAGE_STATE.exists():
+        log("❌ Нет storage_state.json — запусти: python scripts/save_cookies.py")
+        return
 
     scraped_count = 0
     scraped_urls = set()
@@ -247,17 +221,25 @@ def scrape():
 
     try:
         with sync_playwright() as p:
-            ctx = p.chromium.launch_persistent_context(
-                user_data_dir=str(CHROME_PROFILE_TMP),
+            browser = p.chromium.launch(
                 channel="chrome",
                 headless=False,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--no-first-run",
                     "--no-default-browser-check",
-                    "--disable-extensions",
                 ],
                 slow_mo=random.randint(60, 140),
+            )
+            ctx = browser.new_context(
+                storage_state=str(STORAGE_STATE),
+                user_agent=(
+                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
+                    "AppleWebKit/537.36 (KHTML, like Gecko) "
+                    "Chrome/131.0.0.0 Safari/537.36"
+                ),
+                locale="en-US",
+                viewport={"width": 1280, "height": 900},
             )
 
             page = ctx.new_page()
@@ -320,11 +302,10 @@ def scrape():
                         continue
 
             ctx.close()
+            browser.close()
 
     except Exception as e:
         log(f"❌ Критическая ошибка: {e}")
-    finally:
-        cleanup_chrome_profile()
 
     save_keywords(db)
 

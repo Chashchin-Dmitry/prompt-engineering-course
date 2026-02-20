@@ -13,6 +13,9 @@ env/
 # Chrome profile copy (temp)
 chrome-profile-copy/
 
+# Куки Medium — НИКОГДА не пушить в git
+scripts/storage_state.json
+
 # Vector DB (большой, не в git)
 embeddings/
 
