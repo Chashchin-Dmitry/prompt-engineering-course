@@ -24,7 +24,10 @@ SCREENSHOTS_DIR = REPO_PATH / "content" / "screenshots"
 KEYWORDS_FILE   = Path(__file__).parent / "keywords.json"
 LOGS_DIR        = REPO_PATH / "logs"
 
-STORAGE_STATE = Path(__file__).parent / "storage_state.json"
+CHROME_PROFILE = Path(os.getenv(
+    "CHROME_PROFILE_PATH",
+    os.path.expanduser("~/Library/Application Support/Google/Chrome/Default")
+))
 
 # ── Настройки ─────────────────────────────────────────────────────────────────
 MAX_ARTICLES    = int(os.getenv("MAX_ARTICLES_PER_RUN", 15))
@@ -211,8 +214,16 @@ def scrape():
     log(f"📋 Запросы: {', '.join(queries)}")
     log(f"📦 Лимит: {MAX_ARTICLES} статей | Ключей в базе: {len(db['queue'])}")
 
-    if not STORAGE_STATE.exists():
-        log("❌ Нет storage_state.json — запусти: python scripts/save_cookies.py")
+    # Проверяем что Chrome не запущен (он заблокирует профиль)
+    chrome_running = subprocess.run(
+        ["pgrep", "-x", "Google Chrome"], capture_output=True
+    ).returncode == 0
+    if chrome_running:
+        log("❌ Закрой Google Chrome перед запуском скрапера! (Cmd+Q)")
+        return
+
+    if not CHROME_PROFILE.exists():
+        log(f"❌ Chrome профиль не найден: {CHROME_PROFILE}")
         return
 
     scraped_count = 0
@@ -221,25 +232,18 @@ def scrape():
 
     try:
         with sync_playwright() as p:
-            browser = p.chromium.launch(
+            ctx = p.chromium.launch_persistent_context(
+                user_data_dir=str(CHROME_PROFILE),
                 channel="chrome",
                 headless=False,
                 args=[
                     "--disable-blink-features=AutomationControlled",
                     "--no-first-run",
                     "--no-default-browser-check",
+                    "--disable-sync",
+                    "--no-service-autorun",
                 ],
                 slow_mo=random.randint(60, 140),
-            )
-            ctx = browser.new_context(
-                storage_state=str(STORAGE_STATE),
-                user_agent=(
-                    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) "
-                    "AppleWebKit/537.36 (KHTML, like Gecko) "
-                    "Chrome/131.0.0.0 Safari/537.36"
-                ),
-                locale="en-US",
-                viewport={"width": 1280, "height": 900},
             )
 
             page = ctx.new_page()
@@ -302,7 +306,6 @@ def scrape():
                         continue
 
             ctx.close()
-            browser.close()
 
     except Exception as e:
         log(f"❌ Критическая ошибка: {e}")
