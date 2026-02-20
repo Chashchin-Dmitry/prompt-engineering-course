@@ -1,0 +1,97 @@
+# E26 : ReAct — Synergizing Reasoning and Acting in Language Models
+
+**Source:** https://medium.com/papers-i-found/e26-react-synergizing-reasoning-and-acting-in-language-models-14a08f46c33d
+**Author:** Praveen Thenraj
+**Published:** None
+**Scraped:** 2026-02-20
+
+---
+
+Press enter or click to view image in full size
+Photo by
+AbsolutVision
+on
+Unsplash
+E26 : ReAct — Synergizing Reasoning and Acting in Language Models
+Praveen Thenraj
+6 min read
+·
+Jun 23, 2024
+--
+Combining reasoning along with actioning helps to solve knowledge-intensive reasoning and interactive decision making problems better than using them as separate strategies
+Paper Name :
+ReAct - Synergizing Reasoning and Acting in Language Models
+Paper URL :
+https://arxiv.org/pdf/2210.03629
+Authors :
+Princeton University - Shunyu Yao, Karthik Narasimhan
+Google Research, Brain team - Jeffrey Zhao, Dian Yu, Nan Du, Izhak Shafran, Yuan Cao
+Conference :
+ICLR 2023
+Please find annotated paper
+here
+.
+Problem Statement :
+Existing reasoning based prompting solutions leverage only the internal knowledge of the models to generate reasoning steps to solve the problems.
+Existing action based prompting solutions execute an action by leveraging only the external knowledge to identify the responses to the problems and does not have any reasoning steps involved.
+Fine-tuning or Reinforcement learning based solutions require lot of manpower to create annotated datasets that contain reasoning trajectories.
+Solution :
+A prompt only solution that combines the reasoning power of the model that utilises its internal pre-trained knowledge to augment the actioning power of the models to execute a task to extract proper information from external knowledge source as an observation.
+In ReAct prompting, the LLM is prompted to create a chain that contains thought-action-observation to solve complex problems
+Given a question, thought helps to create useful information by reasoning using the model’s internal knowledge. A thought can can be like decomposing a goal into multiple subgoals, creating a plan for the goal, track the completion of subgoals, extracting information from the observation step, handle exceptions and adjust the action plans
+For a given thought step, the entire previous trajectory of thought-action-observation acts as a context.This helps the ReAct framework to adjust the thoughts accordingly based on the overall goal to accomplish and the subgoals achieved till that point
+The action step performs a particular action based on the input received from the thought step. In this paper, the action step is designed to perform either of three actions - Search, Lookup and Finish by connecting with external data source
+Search
+- search[entity] helps to search the entity identified by thought, in wiki page. If found it retrieves the first five sentences from that entity wiki page
+Lookup
+- lookup[string] helps to retrieve the next sentence from a wiki page containing that string. This action is similar to Ctrl+F
+Finish
+- finish[answer] helps to finish the current task with answer
+The result of the action step is captured in observation step which contains the responses to the action initiated.
+Experimentation :
+LLM - PaLM-2 - 540B
+External knowledge base - wikidata
+Dataset evaluated :
+HotPotQA - multi-hop QA
+Fact Verification (Fever) - dataset with claims and labels as SUPPORTS, REFUTES, NOT ENOUGH INFO
+ALFWorld - a synthetic text-based game
+WebShop - online shopping environment with human instructions and products
+Baselines evaluated - Standard prompting, CoT, CoT-SC, Act only, ReAct + CoT-Sc, CoT-SC + ReAct, Imitation Learning (IL), Imitation Learning + Reinforcement Learning (IL + RL)
+Metrics used :
+HotpotQA - Exact Match (EM)
+Fever - Accuracy
+ALFWorld -
+WebShop - Score, SR
+Observations :
+ReAct outperforms Act-only prompting on HotpotQA and Fever datasets.
+CoT and CoT-SC outperform ReAct on HotpotQA but falls behind ReAct on Fever dataset
+Performances of baseline vs ReAct on HotpotQA and Fever datasets
+On further investigation of taking 50 samples each from success and failure class of HotpotQA through ReAct (100 samples) and CoT (100 samples) and trying to categorise them, it was found that CoT is more prone to hallucination due to its dependency on only internal pre-trained knowledge of the model, whereas ReAct leverages access to external knowledge to avoid hallucination.
+Also it was found that the rigid structure of ReAct like thought, action, observation sometime causes the model to generate the same thought and action from previous steps again and again which the authors classify as a reasoning error.
+Press enter or click to view image in full size
+Categorising the success and failure scenarios of ReAct and CoT on Hotpot QA
+Also, the non-informative retrieval such as empty result or non useful search results from an action step in ReAct also contributes to the major failure in ReAct. No or non useful information confuses the model’s reasoning abilities and hampers its ability to formulate and execute the thoughts properly
+ReAct -> CoT-SC and CoT-SC -> ReAct strategies improved the performance compared to both CoT and CoT-SC on HotPotQA. When combining the two strategies, limits were set to determine when to switch from ReAct to CoT-SC or vice versa.
+In ReAct -> CoT-SC, 5 and 7 ReAct steps respectively for HotPotQA and Fever datasets were set as limit before switching to CoT-SC as post these steps, ReAct starts to generate duplicate steps.
+Similarly, if a majority response does not get more than (n/2) votes, where n is the number of responses generated by CoT-SC then the approach would switch from CoT-SC to ReAct.
+CoT-SC when used solely for HotpotQA, uses 21 samples to obtain the maximum performance, whereas ReAct+CoT-SC achieves this with 3–5 samples for voting.
+Number of samples in CoT-SC vs ReAct -> CoT-SC vs CoT-SC -> ReAct
+Performance of ReAct using smaller models like PaLM-2 (8B) was less compared to bigger models like PaLM-2 (64B) and PaLM-2 (540B) on HotpotQA which is an expected behaviour due to the better reasoning and action planning and executing capabilities of the models with increased parameter size
+Prompting Vs Fine-tuning and Prompting
+However when fine-tuned on a dataset containing 3000 trajectories (thoughts-actions-observations)and then evaluated, ReAct based prompting outperforms standard, CoT and Act prompting methods even when using smaller model (PaLM2–8B).
+Also it can be seen that, ReAct with fine-tuning for 8B model outperforms 62B model using prompting only techniques. Similarly, ReAct with fine-tuning for 64B model outperforms prompting only techniques used with 540B model
+ReAct outperforms Act-only comfortably on decision making tasks like AlfWorld. One possible reason attributed is the reasoning step involved in ReAct which helps to use the commonsense knowledge of the model to solve AlfWorld tasks that contain household related tasks.
+Press enter or click to view image in full size
+Performance on AlfWorld dataset
+ReAct even outperforms BUTLER - a method where the imitation agents were trained on huge corpus of such tasks
+ReAct also outperforms Act-only on Webshop dataset where given a user instruction, the objective is to identify the product to buy based on all the attributes mentioned by the user. Here score is used to identify the number of times correct attributes is identified out of the total samples and Success Rate(SR) is used to identify how many times all the attributes of a sample are correctly identified out of the total samples taken for validation
+Comparision of ReAct with baselines for WebShop dataset
+ReAct also outperforms imitation learning and imitation learning with reinforcement learning techniques on WebShop dataset.
+ReAct when tested with GPT-3 model instead of PaLM-2 model maintains robustness in performance thus proving that the approach can work with different models. Infact, GPT-3 outperformed PaLM-2 model performance on HotpotQA task which may be attributed to the instruction fine-tuning done for GPT-3.
+Conclusion :
+ReAct mimics a human way of using the reasoning abilities to plan and execute a task which helps it to perform better compared to other strategies.
+ReAct when succeeded or preceeded by CoT-SC shows even more promising results which shows that some tasks would pre-dominantly require reasoning based on internal knowledge of model (like in CoT) whereas some tasks would require action based on external knowledge (like in Act-only)
+Results also prove that combining ReAct with other techniques like fine-tuning, reinforcement learning can further improve the performance of ReAct based prompting.
+
+---
+*Auto-collected for Prompt Engineering Course*

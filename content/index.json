@@ -1,0 +1,62 @@
+{
+  "scraped_urls": [
+    "https://dibishks.medium.com/what-happens-when-your-ai-written-app-gets-hacked-46a8232a371f",
+    "https://medium.com/@shoaibkhalid65/the-skill-that-multiplies-developer-productivity-prompt-engineering-0255ebfcc0a1",
+    "https://medium.com/@leojesus.dev/a-maestria-do-prompt-mega-prompts-chaining-e-a-cria%C3%A7%C3%A3o-de-fluxos-aut%C3%B4nomos-f8e409a358ba",
+    "https://medium.com/@singh.tarus/tracking-llm-hallucinations-using-react-style-reasoning-without-telling-the-model-the-rules-855ca6147c29",
+    "https://medium.com/@akankshasinha247/prompt-engineering-part-3-unlocking-llm-superpowers-with-reasoning-techniques-9848cabc21f0",
+    "https://medium.com/@tahirbalarabe2/what-is-prompt-engineering-rag-cot-react-dsp-explained-0aa0a9bd0a90",
+    "https://medium.com/papers-i-found/e26-react-synergizing-reasoning-and-acting-in-language-models-14a08f46c33d"
+  ],
+  "articles": [
+    {
+      "url": "https://dibishks.medium.com/what-happens-when-your-ai-written-app-gets-hacked-46a8232a371f",
+      "title": "What Happens When Your AI-Written App Gets Hacked",
+      "file": "2026-02-20_What-Happens-When-Your-AI-Written-App-Gets-Hacked",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@shoaibkhalid65/the-skill-that-multiplies-developer-productivity-prompt-engineering-0255ebfcc0a1",
+      "title": "The Skill That Multiplies Developer Productivity : Prompt Engineering",
+      "file": "2026-02-20_The-Skill-That-Multiplies-Developer-Productivity--Prompt-Eng",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@leojesus.dev/a-maestria-do-prompt-mega-prompts-chaining-e-a-cria%C3%A7%C3%A3o-de-fluxos-aut%C3%B4nomos-f8e409a358ba",
+      "title": "A Maestria do Prompt: Mega-Prompts, Chaining e a Criação de Fluxos Autônomos",
+      "file": "2026-02-20_A-Maestria-do-Prompt-Mega-Prompts-Chaining-e-a-Criação-de-Fl",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@singh.tarus/tracking-llm-hallucinations-using-react-style-reasoning-without-telling-the-model-the-rules-855ca6147c29",
+      "title": "Tracking LLM Hallucinations Using ReAct-Style Reasoning (Without Telling the Model the Rules)",
+      "file": "2026-02-20_Tracking-LLM-Hallucinations-Using-ReAct-Style-Reasoning-With",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@akankshasinha247/prompt-engineering-part-3-unlocking-llm-superpowers-with-reasoning-techniques-9848cabc21f0",
+      "title": "Prompt Engineering Part 3: Unlocking LLM Superpowers with Reasoning Techniques",
+      "file": "2026-02-20_Prompt-Engineering-Part-3-Unlocking-LLM-Superpowers-with-Rea",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/@tahirbalarabe2/what-is-prompt-engineering-rag-cot-react-dsp-explained-0aa0a9bd0a90",
+      "title": "💡 What is Prompt Engineering ?:: RAG, CoT, ReAct & DSP Explained",
+      "file": "2026-02-20_What-is-Prompt-Engineering--RAG-CoT-ReAct--DSP-Explained",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    },
+    {
+      "url": "https://medium.com/papers-i-found/e26-react-synergizing-reasoning-and-acting-in-language-models-14a08f46c33d",
+      "title": "E26 : ReAct — Synergizing Reasoning and Acting in Language Models",
+      "file": "2026-02-20_E26--ReAct--Synergizing-Reasoning-and-Acting-in-Language-Mod",
+      "scraped": "2026-02-20",
+      "status": "raw"
+    }
+  ]
+}

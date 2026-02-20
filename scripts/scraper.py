@@ -22,6 +22,7 @@ REPO_PATH    = Path(os.getenv("REPO_PATH", Path(__file__).parent.parent))
 CONTENT_RAW  = REPO_PATH / "content" / "raw"
 LOGS_DIR     = REPO_PATH / "logs"
 KEYWORDS_FILE = Path(__file__).parent / "keywords.json"
+INDEX_FILE   = REPO_PATH / "content" / "index.json"
 
 # ── Настройки ─────────────────────────────────────────────────────────────────
 MAX_ARTICLES    = int(os.getenv("MAX_ARTICLES_PER_RUN", 15))
@@ -77,6 +78,35 @@ def pick_queries(db, n=QUERIES_PER_RUN):
         db["done"] = []
         picks = db["queue"][:n]
     return picks
+
+
+# ── URL Index (global dedup across runs) ─────────────────────────────────────
+
+def load_index():
+    if INDEX_FILE.exists():
+        return json.loads(INDEX_FILE.read_text())
+    return {"scraped_urls": [], "articles": []}
+
+
+def save_index(idx):
+    INDEX_FILE.parent.mkdir(parents=True, exist_ok=True)
+    INDEX_FILE.write_text(json.dumps(idx, ensure_ascii=False, indent=2))
+
+
+def url_already_scraped(idx, url):
+    return url in idx["scraped_urls"]
+
+
+def add_to_index(idx, url, title, filename):
+    if url not in idx["scraped_urls"]:
+        idx["scraped_urls"].append(url)
+        idx["articles"].append({
+            "url": url,
+            "title": title,
+            "file": filename,
+            "scraped": datetime.now().strftime("%Y-%m-%d"),
+            "status": "raw"
+        })
 
 
 def add_discovered_keywords(db, text):
@@ -157,6 +187,13 @@ def fetch_article(session, url):
             return None
 
         soup = BeautifulSoup(r.text, 'lxml')
+
+        # Проверка на member-only / paywall ДО парсинга
+        page_text = r.text
+        if 'Member-only story' in page_text or 'member-only story' in page_text.lower():
+            log(f"🔒 SKIP member-only: {url[:60]}")
+            return None
+
         article_el = soup.find('article')
         if not article_el:
             return None
@@ -249,10 +286,12 @@ def scrape():
     log(f"📦 Лимит: {MAX_ARTICLES} статей | Ключей в базе: {len(db['queue'])}")
 
     session = make_session()
+    idx = load_index()
 
     scraped_count = 0
-    scraped_urls = set()
     new_keywords_total = 0
+    skipped_member = 0
+    skipped_dup = 0
 
     for query in queries:
         if scraped_count >= MAX_ARTICLES:
@@ -265,25 +304,33 @@ def scrape():
         for url in links:
             if scraped_count >= MAX_ARTICLES:
                 break
-            if url in scraped_urls:
+
+            # Дедупликация: уже скачивали этот URL?
+            if url_already_scraped(idx, url):
+                log(f"⏭️ DUP: {url[:60]}")
+                skipped_dup += 1
                 continue
-            scraped_urls.add(url)
 
             log(f"\n📖 {url[:80]}")
             article = fetch_article(session, url)
 
             if article:
-                save_article(article)
+                fname = save_article(article)
+                add_to_index(idx, url, article["title"], fname)
                 nk = add_discovered_keywords(db, article["content"])
                 new_keywords_total += nk
                 scraped_count += 1
                 log(f"✅ [{scraped_count}/{MAX_ARTICLES}] '{article['title'][:50]}'")
+                if nk:
+                    log(f"  🔍 Новые термины: {', '.join(list(db['queue'])[-nk:][:5])}{'...' if nk > 5 else ''}")
             else:
-                log("⏭️ Пропущено (мало контента / пейволл без аккаунта)")
+                skipped_member += 1
 
             human_delay()
 
     save_keywords(db)
+    save_index(idx)
+    log(f"📊 Пропущено: {skipped_dup} дублей | {skipped_member} member-only/пустых")
 
     log(f"\n{'='*60}")
     log(f"✅ Готово: {scraped_count} статей | +{new_keywords_total} новых терминов")
