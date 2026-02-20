@@ -1,6 +1,18 @@
+# Scraper
 playwright==1.42.0
 playwright-stealth==1.0.6
 python-dotenv==1.0.1
+
+# Processor
 markdownify==0.12.1
-Pillow==10.2.0
+
+# Embedder + Vector DB
+chromadb==0.4.24
+openai==1.14.0
+
+# RAG Bot
+anthropic==0.21.3
+
+# Utils
 requests==2.31.0
+Pillow==10.2.0

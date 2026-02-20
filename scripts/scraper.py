@@ -117,10 +117,17 @@ def add_discovered_keywords(db, text):
 def copy_chrome_profile():
     if CHROME_PROFILE_TMP.exists():
         shutil.rmtree(CHROME_PROFILE_TMP)
+    CHROME_PROFILE_TMP.mkdir(parents=True, exist_ok=True)
     log("📋 Копирую Chrome профиль...")
-    shutil.copytree(CHROME_PROFILE_SRC, CHROME_PROFILE_TMP,
-                    ignore=shutil.ignore_patterns("SingletonLock", "SingletonCookie"),
-                    ignore_errors=True)
+    subprocess.run([
+        "rsync", "-a", "--quiet",
+        "--exclude=SingletonLock",
+        "--exclude=SingletonCookie",
+        "--exclude=GPUCache",
+        "--exclude=*.log",
+        f"{CHROME_PROFILE_SRC}/",
+        f"{CHROME_PROFILE_TMP}/"
+    ], capture_output=True)
     log("✅ Профиль скопирован")
 
 

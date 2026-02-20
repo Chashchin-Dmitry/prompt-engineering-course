@@ -13,6 +13,13 @@ env/
 # Chrome profile copy (temp)
 chrome-profile-copy/
 
+# Vector DB (большой, не в git)
+embeddings/
+
+# Logs
+logs/
+*.log
+
 # OS
 .DS_Store
 Thumbs.db
@@ -21,6 +28,5 @@ Thumbs.db
 *.mp4
 *.zip
 
-# Logs
-logs/
-*.log
+# Index (генерируется автоматически)
+# content/index.json  ← оставляем в git для синхронизации
